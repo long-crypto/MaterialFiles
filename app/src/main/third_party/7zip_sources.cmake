@@ -4,6 +4,7 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/7zBuf2.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/7z/7zCompressionMode.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/7zCrc.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/7zCrcOpt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/7z/7zDecode.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/7z/7zEncode.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/7z/7zExtract.cpp
@@ -19,6 +20,7 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/7zStream.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/7z/7zUpdate.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Aes.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/AesOpt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Alloc.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/ApfsHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/ApmHandler.cpp
@@ -84,6 +86,7 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Windows/FileFind.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Windows/FileIO.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Windows/FileName.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Common/FileStreams.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Common/FilterCoder.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/Common/FindSignature.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/FlvHandler.cpp
@@ -111,6 +114,7 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/LpHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/LvmHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/LzFind.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/LzFindOpt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/LzFindMt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/LzFindPrepare.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Compress/LzOutWindow.cpp
@@ -198,9 +202,11 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/Rar/RarHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/RpmHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Sha1.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Sha1Opt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/Sha1Prepare.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/Sha1Reg.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Sha256.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Sha256Opt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/Sha256Prepare.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/Sha256Reg.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Sha3.c
@@ -219,6 +225,7 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/StringConvert.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/StringToInt.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/SwapBytes.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Sort.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/SwfHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Windows/Synchronization.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Windows/System.cpp
@@ -253,6 +260,7 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/Xxh64Reg.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/Xz.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/XzCrc64.c
+    ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/XzCrc64Opt.c
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/XzCrc64Init.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/Common/XzCrc64Reg.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/C/XzDec.c
