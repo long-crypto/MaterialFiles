@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "CPP/Common/MyWindows.h"
-#include "CPP/Common/MyInitGuid.h"
 #include "CPP/Common/MyCom.h"
 #include "CPP/Common/StringConvert.h"
 #include "CPP/Windows/PropVariant.h"
@@ -47,12 +46,12 @@ constexpr jint kErrorExtractionFailed = 4;
 
 constexpr ULONGLONG kFileTimeUnixEpochOffset = 116444736000000000ULL;
 
-#define DEFINE_GUID_ARC(name, id) \
-  Z7_DEFINE_GUID(name, 0x23170F69, 0x40C1, 0x278A, 0x10, 0x00, 0x00, 0x01, 0x10, id, 0x00, 0x00)
-
-DEFINE_GUID_ARC(CLSID_Format7z, 0x07);
-DEFINE_GUID_ARC(CLSID_FormatRar, 0x03);
-DEFINE_GUID_ARC(CLSID_FormatRar5, 0xCC);
+static const GUID CLSID_Format7z = {
+    0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0x07, 0x00, 0x00}};
+static const GUID CLSID_FormatRar = {
+    0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0x03, 0x00, 0x00}};
+static const GUID CLSID_FormatRar5 = {
+    0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0xCC, 0x00, 0x00}};
 
 struct PasswordAttempt {
   bool defined;
