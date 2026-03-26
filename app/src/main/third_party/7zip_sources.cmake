@@ -280,3 +280,14 @@ set(SEVENZIP_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/CPP/7zip/Archive/ZstdHandler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/resource.rc
 )
+
+# This file is included from /app/CMakeLists.txt, but CMAKE_CURRENT_LIST_DIR here points to
+# /app/src/main/third_party, not /app. Normalize the generated paths to the vendored 7-Zip tree.
+string(REPLACE
+    "${CMAKE_CURRENT_LIST_DIR}/app/src/main/third_party/7zip/"
+    "${CMAKE_CURRENT_LIST_DIR}/7zip/"
+    SEVENZIP_SOURCES
+    "${SEVENZIP_SOURCES}")
+
+# The generator accidentally emitted a non-existent top-level resource file.
+list(REMOVE_ITEM SEVENZIP_SOURCES "${CMAKE_CURRENT_LIST_DIR}/7zip/resource.rc")
