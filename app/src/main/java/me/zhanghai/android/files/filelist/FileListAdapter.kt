@@ -115,12 +115,12 @@ class FileListAdapter(
         val changedPaths = mutableSetOf<Path>()
         for ((path, size) in this.sizeMap) {
             if (sizeMap[path] != size) {
-                changedPaths += path
+                changedPaths.add(path)
             }
         }
         for ((path, size) in sizeMap) {
             if (this.sizeMap[path] != size) {
-                changedPaths += path
+                changedPaths.add(path)
             }
         }
         this.sizeMap = sizeMap
