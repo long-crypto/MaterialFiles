@@ -273,9 +273,9 @@ static jint GetEntryType(bool isDirectory, bool hasSymbolicLink, jint mode) {
 class COpenCallback Z7_final : public IArchiveOpenCallback,
                                public ICryptoGetTextPassword,
                                public CMyUnknownImp {
- public:
   Z7_IFACES_IMP_UNK_2(IArchiveOpenCallback, ICryptoGetTextPassword)
 
+ public:
   bool PasswordIsDefined = false;
   bool PasswordWasRequested = false;
   UString Password;
@@ -300,10 +300,9 @@ Z7_COM7F_IMF(COpenCallback::CryptoGetTextPassword(BSTR *password)) {
 class CSingleEntryExtractCallback Z7_final : public IArchiveExtractCallback,
                                              public ICryptoGetTextPassword,
                                              public CMyUnknownImp {
- public:
   Z7_IFACES_IMP_UNK_2(IArchiveExtractCallback, ICryptoGetTextPassword)
-  Z7_IFACE_COM7_IMP(IProgress)
 
+ public:
   bool PasswordIsDefined = false;
   bool PasswordWasRequested = false;
   UString Password;
@@ -315,52 +314,60 @@ class CSingleEntryExtractCallback Z7_final : public IArchiveExtractCallback,
   CMyComPtr<ISequentialOutStream> outFileStream;
 
  public:
-  Z7_COM7F_IMF(SetTotal(UInt64)) {
-    return S_OK;
-  }
-
-  Z7_COM7F_IMF(SetCompleted(const UInt64 *)) {
-    return S_OK;
-  }
-
-  Z7_COM7F_IMF(GetStream(UInt32, ISequentialOutStream **outStream, Int32 askExtractMode)) {
-    *outStream = nullptr;
-    outFileStream.Release();
-    if (askExtractMode != NArchive::NExtract::NAskMode::kExtract) {
-      return S_OK;
-    }
-    outFileStreamSpec = new COutFileStream;
-    CMyComPtr<ISequentialOutStream> outStreamLoc(outFileStreamSpec);
-    if (!outFileStreamSpec->Create_ALWAYS(TargetPath)) {
-      return E_ABORT;
-    }
-    outFileStream = outStreamLoc;
-    *outStream = outStreamLoc.Detach();
-    return S_OK;
-  }
-
-  Z7_COM7F_IMF(PrepareOperation(Int32)) {
-    return S_OK;
-  }
-
-  Z7_COM7F_IMF(SetOperationResult(Int32 operationResult)) {
-    OperationResult = operationResult;
-    if (outFileStream) {
-      const HRESULT hr = outFileStreamSpec->Close();
-      outFileStream.Release();
-      return hr;
-    }
-    return S_OK;
-  }
-
-  Z7_COM7F_IMF(CryptoGetTextPassword(BSTR *password)) {
-    PasswordWasRequested = true;
-    if (!PasswordIsDefined) {
-      return E_ABORT;
-    }
-    return StringToBstr(Password, password);
-  }
+  Z7_COM7F_IMF(SetTotal(UInt64 total));
+  Z7_COM7F_IMF(SetCompleted(const UInt64 *completeValue));
+  Z7_COM7F_IMF(GetStream(UInt32 index, ISequentialOutStream **outStream, Int32 askExtractMode));
+  Z7_COM7F_IMF(PrepareOperation(Int32 askExtractMode));
+  Z7_COM7F_IMF(SetOperationResult(Int32 operationResult));
+  Z7_COM7F_IMF(CryptoGetTextPassword(BSTR *password));
 };
+
+Z7_COM7F_IMF(CSingleEntryExtractCallback::SetTotal(UInt64)) {
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSingleEntryExtractCallback::SetCompleted(const UInt64 *)) {
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSingleEntryExtractCallback::GetStream(
+    UInt32, ISequentialOutStream **outStream, Int32 askExtractMode)) {
+  *outStream = nullptr;
+  outFileStream.Release();
+  if (askExtractMode != NArchive::NExtract::NAskMode::kExtract) {
+    return S_OK;
+  }
+  outFileStreamSpec = new COutFileStream;
+  CMyComPtr<ISequentialOutStream> outStreamLoc(outFileStreamSpec);
+  if (!outFileStreamSpec->Create_ALWAYS(TargetPath)) {
+    return E_ABORT;
+  }
+  outFileStream = outStreamLoc;
+  *outStream = outStreamLoc.Detach();
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSingleEntryExtractCallback::PrepareOperation(Int32)) {
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSingleEntryExtractCallback::SetOperationResult(Int32 operationResult)) {
+  OperationResult = operationResult;
+  if (outFileStream) {
+    const HRESULT hr = outFileStreamSpec->Close();
+    outFileStream.Release();
+    return hr;
+  }
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CSingleEntryExtractCallback::CryptoGetTextPassword(BSTR *password)) {
+  PasswordWasRequested = true;
+  if (!PasswordIsDefined) {
+    return E_ABORT;
+  }
+  return StringToBstr(Password, password);
+}
 
 static bool TryOpenArchive(
     const FString &archivePath, const GUID &format, const PasswordAttempt &attempt,
@@ -382,10 +389,11 @@ static bool TryOpenArchive(
     result.stream.Release();
     return false;
   }
-  CMyComPtr<COpenCallback> openCallbackSpec = new COpenCallback;
+  COpenCallback *openCallbackSpec = new COpenCallback;
+  CMyComPtr<IArchiveOpenCallback> openCallback(openCallbackSpec);
   openCallbackSpec->PasswordIsDefined = attempt.defined;
   openCallbackSpec->Password = attempt.value;
-  const HRESULT hr = result.archive->Open(result.stream, nullptr, openCallbackSpec);
+  const HRESULT hr = result.archive->Open(result.stream, nullptr, openCallback);
   passwordRequested = openCallbackSpec->PasswordWasRequested;
   if (hr != S_OK) {
     errorMessage = passwordRequested ? "Incorrect password" : "Failed to open archive";
@@ -552,21 +560,22 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_extractE
         entryFound = true;
         const bool encrypted = GetBoolProperty(openResult.archive, index, kpidEncrypted, false);
 
-        CMyComPtr<CSingleEntryExtractCallback> extractCallback = new CSingleEntryExtractCallback;
-        extractCallback->PasswordIsDefined = attempt.defined;
-        extractCallback->Password = attempt.value;
-        extractCallback->TargetPath = targetPath;
+        CSingleEntryExtractCallback *extractCallbackSpec = new CSingleEntryExtractCallback;
+        CMyComPtr<IArchiveExtractCallback> extractCallback(extractCallbackSpec);
+        extractCallbackSpec->PasswordIsDefined = attempt.defined;
+        extractCallbackSpec->Password = attempt.value;
+        extractCallbackSpec->TargetPath = targetPath;
 
         const UInt32 indices[] = {index};
         const HRESULT hr = openResult.archive->Extract(indices, 1, false, extractCallback);
         if (hr == S_OK
-            && extractCallback->OperationResult == NArchive::NExtract::NOperationResult::kOK) {
+            && extractCallbackSpec->OperationResult == NArchive::NExtract::NOperationResult::kOK) {
           return;
         }
 
         ::remove(targetPathUtf8.c_str());
-        if (extractCallback->PasswordWasRequested
-            && IsPasswordFailure(extractCallback->OperationResult, encrypted)) {
+        if (extractCallbackSpec->PasswordWasRequested
+            && IsPasswordFailure(extractCallbackSpec->OperationResult, encrypted)) {
           passwordRequired = true;
           break;
         }
