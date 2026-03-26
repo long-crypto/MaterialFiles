@@ -371,6 +371,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         Settings.FILE_LIST_SHOW_HIDDEN_FILES.observe(viewLifecycleOwner) {
             onShowHiddenFilesChanged(it)
         }
+        Settings.FILE_LIST_SHOW_SIZE.observe(viewLifecycleOwner) { onShowSizeChanged(it) }
     }
 
     override fun onResume() {
@@ -449,6 +450,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         updateViewSortMenuItems()
         updateSelectAllMenuItem()
         updateShowHiddenFilesMenuItem()
+        updateShowSizeMenuItem()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -530,6 +532,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_show_hidden_files -> {
                 setShowHiddenFiles(!menuBinding.showHiddenFilesItem.isChecked)
+                true
+            }
+            R.id.action_show_size -> {
+                setShowSize(!menuBinding.showSizeItem.isChecked)
                 true
             }
             R.id.action_share -> {
@@ -745,6 +751,21 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         updateShowHiddenFilesMenuItem()
     }
 
+    private fun setShowSize(showSize: Boolean) {
+        Settings.FILE_LIST_SHOW_SIZE.putValue(showSize)
+    }
+
+    private fun onShowSizeChanged(showSize: Boolean) {
+        adapter.showSize = showSize
+        updateShowSizeMenuItem()
+        val files = viewModel.fileListStateful.value
+        if (showSize && files != null) {
+            updateFileItemSizeLiveData(files)
+        } else {
+            clearFileItemSizeLiveData()
+        }
+    }
+
     private fun updateAdapterFileList() {
         var files = viewModel.fileListStateful.value ?: return
         if (!Settings.FILE_LIST_SHOW_HIDDEN_FILES.valueCompat) {
@@ -754,6 +775,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun updateFileItemSizeLiveData(files: List<FileItem>) {
+        if (!Settings.FILE_LIST_SHOW_SIZE.valueCompat) {
+            clearFileItemSizeLiveData()
+            return
+        }
         if (fileItemSizeFiles == files) {
             return
         }
@@ -780,6 +805,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         val showHiddenFiles = Settings.FILE_LIST_SHOW_HIDDEN_FILES.valueCompat
         menuBinding.showHiddenFilesItem.isChecked = showHiddenFiles
+    }
+
+    private fun updateShowSizeMenuItem() {
+        if (!this::menuBinding.isInitialized) {
+            return
+        }
+        val showSize = Settings.FILE_LIST_SHOW_SIZE.valueCompat
+        menuBinding.showSizeItem.isChecked = showSize
     }
 
     private fun share() {
@@ -1759,7 +1792,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val sortDirectoriesFirstItem: MenuItem,
         val viewSortPathSpecificItem: MenuItem,
         val selectAllItem: MenuItem,
-        val showHiddenFilesItem: MenuItem
+        val showHiddenFilesItem: MenuItem,
+        val showSizeItem: MenuItem
     ) {
         companion object {
             fun inflate(menu: Menu, inflater: MenuInflater): MenuBinding {
@@ -1775,7 +1809,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                     menu.findItem(R.id.action_sort_directories_first),
                     menu.findItem(R.id.action_view_sort_path_specific),
                     menu.findItem(R.id.action_select_all),
-                    menu.findItem(R.id.action_show_hidden_files)
+                    menu.findItem(R.id.action_show_hidden_files),
+                    menu.findItem(R.id.action_show_size)
                 )
             }
         }

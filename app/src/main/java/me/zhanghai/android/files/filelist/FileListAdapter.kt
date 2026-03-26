@@ -80,6 +80,11 @@ class FileListAdapter(
 
     private val filePositionMap = mutableMapOf<Path, Int>()
     private var sizeMap = emptyMap<Path, Long>()
+    var showSize = true
+        set(value) {
+            field = value
+            notifyItemRangeChanged(0, itemCount)
+        }
 
     private lateinit var _nameEllipsize: TextUtils.TruncateAt
     var nameEllipsize: TextUtils.TruncateAt
@@ -337,12 +342,15 @@ class FileListAdapter(
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText?.text = attributes.lastModifiedTime().toInstant()
-            .formatShort(holder.itemView.context)
+        holder.descriptionText?.text = null
         val size = sizeMap[path] ?: if (!isDirectory) attributes.size() else null
         holder.sizeText.apply {
-            isVisible = size != null
-            text = size?.asFileSize()?.formatHumanReadable(context)
+            isVisible = showSize && size != null
+            text = if (showSize) {
+                size?.asFileSize()?.formatHumanReadable(context)
+            } else {
+                null
+            }
         }
         val isArchivePath = path.isArchivePath
         menu.findItem(R.id.action_copy)
