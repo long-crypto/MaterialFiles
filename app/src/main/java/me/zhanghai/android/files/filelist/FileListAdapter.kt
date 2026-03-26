@@ -342,11 +342,23 @@ class FileListAdapter(
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText?.text = attributes.lastModifiedTime().toInstant()
-            .formatShort(holder.itemView.context)
-        val size = sizeMap[path] ?: if (!isDirectory) attributes.size() else null
+        holder.descriptionText?.text = if (isDirectory) {
+            null
+        } else {
+            val context = holder.itemView.context
+            val lastModificationTime = attributes.lastModifiedTime().toInstant().formatShort(context)
+            if (showSize) {
+                val size = attributes.fileSize.formatHumanReadable(context)
+                val descriptionSeparator =
+                    context.getString(R.string.file_item_description_separator)
+                listOf(lastModificationTime, size).joinToString(descriptionSeparator)
+            } else {
+                lastModificationTime
+            }
+        }
+        val size = sizeMap[path]
         holder.sizeText.apply {
-            isVisible = showSize && size != null
+            isVisible = showSize && isDirectory && size != null
             text = if (showSize) {
                 size?.asFileSize()?.formatHumanReadable(context)
             } else {

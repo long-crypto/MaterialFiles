@@ -16,9 +16,7 @@ import java.util.concurrent.Future
 
 class FileListItemSizeLiveData(
     private val files: List<FileItem>
-) : CloseableLiveData<Map<Path, Long>>(
-    files.filterNot { it.attributes.isDirectory }.associate { it.path to it.attributes.size() }
-) {
+) : CloseableLiveData<Map<Path, Long>>(emptyMap()) {
     private var future: Future<Unit>? = null
 
     init {
