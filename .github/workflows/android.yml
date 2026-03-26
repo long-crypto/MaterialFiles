@@ -18,7 +18,11 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
     - name: Build with Gradle
-      run: ./gradlew assembleRelease
+      run: |
+         rm app/src/main/java/me/zhanghai/android/files/nonfree
+         sed -i 's/signingConfig//g' app/build.gradle
+         find -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
+         ./gradlew assembleRelease
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
