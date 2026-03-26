@@ -82,6 +82,7 @@ import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.settings.Settings
+import me.zhanghai.android.files.storageanalysis.StorageAnalysisActivity
 import me.zhanghai.android.files.terminal.Terminal
 import me.zhanghai.android.files.ui.AppBarLayoutExpandHackListener
 import me.zhanghai.android.files.ui.CoordinatorAppBarLayout
@@ -180,6 +181,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private lateinit var layoutManager: GridLayoutManager
 
     private lateinit var adapter: FileListAdapter
+    private var fileItemSizeLiveData: FileListItemSizeLiveData? = null
+    private var fileItemSizeFiles: List<FileItem>? = null
 
     private val debouncedSearchRunnable = DebouncedRunnable(Handler(Looper.getMainLooper()), 1000) {
         if (!isResumed || !viewModel.isSearchViewExpanded) {
@@ -381,6 +384,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 
+    override fun onDestroyView() {
+        clearFileItemSizeLiveData()
+        super.onDestroyView()
+    }
+
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
 
@@ -512,6 +520,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 refresh()
                 true
             }
+            R.id.action_storage_analysis -> {
+                openStorageAnalysis(currentPath)
+                true
+            }
             R.id.action_select_all -> {
                 selectAllFiles()
                 true
@@ -611,9 +623,11 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         binding.emptyView.fadeToVisibilityUnsafe(stateful is Success && !hasFiles)
         if (files != null) {
             updateAdapterFileList()
+            updateFileItemSizeLiveData(files)
         } else {
             // This resets animation as well.
             adapter.clear()
+            clearFileItemSizeLiveData()
         }
         if (stateful is Success) {
             viewModel.pendingState?.let { layoutManager.onRestoreInstanceState(it) }
@@ -737,6 +751,27 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             files = files.filterNot { it.isHidden }
         }
         adapter.replaceListAndIsSearching(files, viewModel.searchState.isSearching)
+    }
+
+    private fun updateFileItemSizeLiveData(files: List<FileItem>) {
+        if (fileItemSizeFiles == files) {
+            return
+        }
+        clearFileItemSizeLiveData(clearAdapter = false)
+        fileItemSizeFiles = files.toList()
+        fileItemSizeLiveData = FileListItemSizeLiveData(files).also { liveData ->
+            liveData.observe(viewLifecycleOwner) { adapter.replaceSizeMap(it) }
+        }
+    }
+
+    private fun clearFileItemSizeLiveData(clearAdapter: Boolean = true) {
+        fileItemSizeLiveData?.removeObservers(viewLifecycleOwner)
+        fileItemSizeLiveData?.close()
+        fileItemSizeLiveData = null
+        fileItemSizeFiles = null
+        if (clearAdapter) {
+            adapter.replaceSizeMap(emptyMap())
+        }
     }
 
     private fun updateShowHiddenFilesMenuItem() {
@@ -1418,6 +1453,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             showToast(R.string.shortcut_created)
         }
+    }
+
+    override fun openStorageAnalysis(file: FileItem) {
+        openStorageAnalysis(file.path)
+    }
+
+    private fun openStorageAnalysis(path: Path) {
+        startActivitySafe(StorageAnalysisActivity.createIntent(path))
     }
 
     override fun showPropertiesDialog(file: FileItem) {

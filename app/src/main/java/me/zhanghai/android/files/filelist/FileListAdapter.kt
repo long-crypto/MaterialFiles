@@ -27,6 +27,7 @@ import me.zhanghai.android.files.compat.isSingleLineCompat
 import me.zhanghai.android.files.databinding.FileItemGridBinding
 import me.zhanghai.android.files.databinding.FileItemListBinding
 import me.zhanghai.android.files.file.FileItem
+import me.zhanghai.android.files.file.asFileSize
 import me.zhanghai.android.files.file.fileSize
 import me.zhanghai.android.files.file.formatShort
 import me.zhanghai.android.files.file.iconRes
@@ -78,6 +79,7 @@ class FileListAdapter(
     private val selectedFiles = fileItemSetOf()
 
     private val filePositionMap = mutableMapOf<Path, Int>()
+    private var sizeMap = emptyMap<Path, Long>()
 
     private lateinit var _nameEllipsize: TextUtils.TruncateAt
     var nameEllipsize: TextUtils.TruncateAt
@@ -106,6 +108,24 @@ class FileListAdapter(
         for (file in changedFiles) {
             val position = filePositionMap[file.path]
             position?.let { notifyItemChanged(it, PAYLOAD_STATE_CHANGED) }
+        }
+    }
+
+    fun replaceSizeMap(sizeMap: Map<Path, Long>) {
+        val changedPaths = mutableSetOf<Path>()
+        for ((path, size) in this.sizeMap) {
+            if (sizeMap[path] != size) {
+                changedPaths += path
+            }
+        }
+        for ((path, size) in sizeMap) {
+            if (this.sizeMap[path] != size) {
+                changedPaths += path
+            }
+        }
+        this.sizeMap = sizeMap
+        for (path in changedPaths) {
+            filePositionMap[path]?.let { notifyItemChanged(it) }
         }
     }
 
@@ -317,15 +337,12 @@ class FileListAdapter(
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText?.text = if (isDirectory) {
-            null
-        } else {
-            val context = holder.descriptionText!!.context
-            val lastModificationTime = attributes.lastModifiedTime().toInstant()
-                .formatShort(context)
-            val size = attributes.fileSize.formatHumanReadable(context)
-            val descriptionSeparator = context.getString(R.string.file_item_description_separator)
-            listOf(lastModificationTime, size).joinToString(descriptionSeparator)
+        holder.descriptionText?.text = attributes.lastModifiedTime().toInstant()
+            .formatShort(holder.itemView.context)
+        val size = sizeMap[path] ?: if (!isDirectory) attributes.size() else null
+        holder.sizeText.apply {
+            isVisible = size != null
+            text = size?.asFileSize()?.formatHumanReadable(context)
         }
         val isArchivePath = path.isArchivePath
         menu.findItem(R.id.action_copy)
@@ -335,6 +352,7 @@ class FileListAdapter(
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
+        menu.findItem(R.id.action_storage_analysis).isVisible = isDirectory
         holder.popupMenu.setOnMenuItemClickListener {
             when (it.itemId) {
                 R.id.action_open_with -> {
@@ -379,6 +397,10 @@ class FileListAdapter(
                 }
                 R.id.action_create_shortcut -> {
                     listener.createShortcut(file)
+                    true
+                }
+                R.id.action_storage_analysis -> {
+                    listener.openStorageAnalysis(file)
                     true
                 }
                 R.id.action_properties -> {
@@ -429,6 +451,7 @@ class FileListAdapter(
         val badgeImage: ImageView,
         val nameText: TextView,
         val descriptionText: TextView?,
+        val sizeText: TextView,
         val menuButton: ImageButton
     ) : RecyclerView.ViewHolder(root) {
         constructor(binding: FileItemListBinding) : this(
@@ -444,6 +467,7 @@ class FileListAdapter(
             binding.badgeImage,
             binding.nameText,
             binding.descriptionText,
+            binding.sizeText,
             binding.menuButton
         )
 
@@ -460,6 +484,7 @@ class FileListAdapter(
             binding.badgeImage,
             binding.nameText,
             null,
+            binding.sizeText,
             binding.menuButton
         )
 
@@ -482,6 +507,7 @@ class FileListAdapter(
         fun copyPath(file: FileItem)
         fun addBookmark(file: FileItem)
         fun createShortcut(file: FileItem)
+        fun openStorageAnalysis(file: FileItem)
         fun showPropertiesDialog(file: FileItem)
     }
 }

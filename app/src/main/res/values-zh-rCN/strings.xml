@@ -267,6 +267,7 @@
     <string name="file_list_action_navigate_up">向上</string>
     <string name="file_list_action_navigate_to">转到</string>
     <string name="file_list_action_show_hidden_files">显示隐藏文件</string>
+    <string name="file_list_action_storage_analysis">存储空间分析</string>
     <string name="file_list_action_copy_path">复制路径</string>
     <string name="file_list_action_open_in_terminal">在终端中打开</string>
     <string name="file_list_action_add_bookmark">添加书签</string>
@@ -287,6 +288,7 @@
     <string name="file_item_action_open_with">打开方式</string>
     <string name="file_item_action_extract">提取</string>
     <string name="file_item_action_archive">压缩</string>
+    <string name="file_item_action_storage_analysis" translatable="false">@string/file_list_action_storage_analysis</string>
     <string name="file_item_action_properties">属性</string>
 
     <string name="file_properties_title_format">“%1$s”属性</string>
@@ -403,6 +405,9 @@
     <string name="storage_file_system_root_title">根目录</string>
     <string name="storage_list_title">存储空间</string>
     <string name="storage_list_empty">无存储空间</string>
+    <string name="storage_analysis_title">存储空间分析</string>
+    <string name="storage_analysis_total_size">总大小</string>
+    <string name="storage_analysis_empty">没有可分析的项目</string>
     <string name="storage_add_storage_title">添加存储空间</string>
     <string name="storage_add_storage_document_tree">外部存储空间</string>
     <string name="storage_add_storage_ftp_server">FTP 服务器</string>

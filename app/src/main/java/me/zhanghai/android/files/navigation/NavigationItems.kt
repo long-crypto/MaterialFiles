@@ -27,9 +27,9 @@ import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.settings.SettingsActivity
 import me.zhanghai.android.files.settings.StandardDirectoryListActivity
 import me.zhanghai.android.files.storage.AddStorageDialogActivity
-import me.zhanghai.android.files.storage.FileSystemRoot
 import me.zhanghai.android.files.storage.Storage
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
+import me.zhanghai.android.files.storage.getStorageSpace
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.isMounted
 import me.zhanghai.android.files.util.putArgs
@@ -161,26 +161,9 @@ private class StorageVolumeItem(
 }
 
 private fun getStorageSubtitle(linuxPath: String, context: Context): String? {
-    var totalSpace = JavaFile.getTotalSpace(linuxPath)
-    val freeSpace: Long
-    when {
-        totalSpace != 0L -> freeSpace = JavaFile.getFreeSpace(linuxPath)
-        linuxPath == FileSystemRoot.LINUX_PATH -> {
-            // Root directory may not be an actual partition on legacy Android versions (can be
-            // a ramdisk instead). On modern Android the system partition will be mounted as
-            // root instead so let's try with the system partition again.
-            // @see https://source.android.com/devices/bootloader/system-as-root
-            val systemPath = Environment.getRootDirectory().path
-            totalSpace = JavaFile.getTotalSpace(systemPath)
-            freeSpace = JavaFile.getFreeSpace(systemPath)
-        }
-        else -> freeSpace = 0
-    }
-    if (totalSpace == 0L) {
-        return null
-    }
-    val freeSpaceString = freeSpace.asFileSize().formatHumanReadable(context)
-    val totalSpaceString = totalSpace.asFileSize().formatHumanReadable(context)
+    val storageSpace = getStorageSpace(linuxPath) ?: return null
+    val freeSpaceString = storageSpace.freeSpace.asFileSize().formatHumanReadable(context)
+    val totalSpaceString = storageSpace.totalSpace.asFileSize().formatHumanReadable(context)
     return context.getString(
         R.string.navigation_storage_subtitle_format, freeSpaceString, totalSpaceString
     )

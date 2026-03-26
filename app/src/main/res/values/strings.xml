@@ -300,6 +300,7 @@
     <string name="file_list_action_navigate_to">Go to</string>
     <string name="file_list_navigate_to_title" translatable="false">@string/file_list_action_navigate_to</string>
     <string name="file_list_action_show_hidden_files">Show hidden files</string>
+    <string name="file_list_action_storage_analysis">Storage analysis</string>
     <string name="file_list_action_copy_path">Copy path</string>
     <string name="file_list_action_open_in_terminal">Open in terminal</string>
     <string name="file_list_action_add_bookmark">Add bookmark</string>
@@ -328,6 +329,7 @@
     <string name="file_item_action_copy_path" translatable="false">@string/file_list_action_copy_path</string>
     <string name="file_item_action_add_bookmark" translatable="false">@string/file_list_action_add_bookmark</string>
     <string name="file_item_action_create_shortcut" translatable="false">@string/file_list_action_create_shortcut</string>
+    <string name="file_item_action_storage_analysis" translatable="false">@string/file_list_action_storage_analysis</string>
     <string name="file_item_action_properties">Properties</string>
 
     <string name="file_properties_title_format">“%1$s” properties</string>
@@ -529,6 +531,9 @@
     <string name="storage_file_system_root_title">Root</string>
     <string name="storage_list_title">Storage</string>
     <string name="storage_list_empty">No storage</string>
+    <string name="storage_analysis_title">Storage analysis</string>
+    <string name="storage_analysis_total_size">Total size</string>
+    <string name="storage_analysis_empty">No items to analyze</string>
     <string name="storage_add_storage_title">Add storage</string>
     <string name="storage_add_storage_android_data" translatable="false">Android/data</string>
     <string name="storage_add_storage_android_obb" translatable="false">Android/obb</string>

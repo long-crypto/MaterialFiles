@@ -122,6 +122,21 @@
             android:maxLines="2"
             android:textAppearance="?textAppearanceListItemSecondary" />
 
+        <TextView
+            android:id="@+id/sizeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:duplicateParentState="true"
+            android:ellipsize="end"
+            android:gravity="end"
+            android:maxLines="1"
+            android:maxWidth="72dp"
+            android:textAppearance="?textAppearanceListItemSecondary"
+            android:textColor="?android:textColorSecondary"
+            android:visibility="gone" />
+
         <!--
           ~ Cannot use android:duplicateParentState="true" because a button needs to have its own
           ~ pressed state, etc. Necessary states will be duplicated manually in the adapter
