@@ -19,7 +19,7 @@ jobs:
         java-version: '21'
     - name: Build with Gradle
       run: |
-         rm app/src/main/java/me/zhanghai/android/files/nonfree
+         rm -rf app/src/main/java/me/zhanghai/android/files/nonfree
          sed -i 's/signingConfig//g' app/build.gradle
          find -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
          ./gradlew assembleRelease
