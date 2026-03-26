@@ -20,7 +20,7 @@ jobs:
     - name: Build with Gradle
       run: |
          rm -rf app/src/main/java/me/zhanghai/android/files/nonfree
-         sed -i 's/sign//g' app/build.gradle
+         sed -i '/sign/d' app/build.gradle
          find -type f -exec sed -i '/\/\/#ifdef NONFREE/,/\/\/#endif/d' {} +
          ./gradlew assembleRelease
     - name: Upload artifact
