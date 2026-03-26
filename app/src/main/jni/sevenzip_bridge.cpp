@@ -316,10 +316,6 @@ class CSingleEntryExtractCallback Z7_final : public IArchiveExtractCallback,
  public:
   Z7_COM7F_IMF(SetTotal(UInt64 total));
   Z7_COM7F_IMF(SetCompleted(const UInt64 *completeValue));
-  Z7_COM7F_IMF(GetStream(UInt32 index, ISequentialOutStream **outStream, Int32 askExtractMode));
-  Z7_COM7F_IMF(PrepareOperation(Int32 askExtractMode));
-  Z7_COM7F_IMF(SetOperationResult(Int32 operationResult));
-  Z7_COM7F_IMF(CryptoGetTextPassword(BSTR *password));
 };
 
 Z7_COM7F_IMF(CSingleEntryExtractCallback::SetTotal(UInt64)) {
