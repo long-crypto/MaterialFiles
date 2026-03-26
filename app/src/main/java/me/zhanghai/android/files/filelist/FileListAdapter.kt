@@ -342,7 +342,8 @@ class FileListAdapter(
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText?.text = null
+        holder.descriptionText?.text = attributes.lastModifiedTime().toInstant()
+            .formatShort(holder.itemView.context)
         val size = sizeMap[path] ?: if (!isDirectory) attributes.size() else null
         holder.sizeText.apply {
             isVisible = showSize && size != null
