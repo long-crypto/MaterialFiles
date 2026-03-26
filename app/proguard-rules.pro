@@ -30,6 +30,15 @@
 -keep class me.zhanghai.android.files.** implements androidx.appcompat.view.CollapsibleActionView { *; }
 -keep class me.zhanghai.android.files.provider.common.ByteString { *; }
 -keep class me.zhanghai.android.files.provider.linux.syscall.** { *; }
+-keep class me.zhanghai.android.files.provider.archive.archiver.SevenZipBridge { *; }
+-keepnames class me.zhanghai.android.files.provider.archive.archiver.SevenZipEntryData
+-keepclassmembers class me.zhanghai.android.files.provider.archive.archiver.SevenZipEntryData {
+    <init>(java.lang.String, boolean, long, long, long, int, long, int, java.lang.String, int, java.lang.String, int, java.lang.String);
+}
+-keepnames class me.zhanghai.android.files.provider.archive.archiver.SevenZipNativeException
+-keepclassmembers class me.zhanghai.android.files.provider.archive.archiver.SevenZipNativeException {
+    <init>(int, java.lang.String);
+}
 -keepnames class * extends java.lang.Exception
 # For Class.getEnumConstants()
 -keepclassmembers enum * {

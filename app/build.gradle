@@ -43,7 +43,7 @@ android {
         resValue 'string', 'file_provider_authority', applicationId + '.file_provider'
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=none'
+                arguments '-DANDROID_STL=c++_static'
             }
         }
     }

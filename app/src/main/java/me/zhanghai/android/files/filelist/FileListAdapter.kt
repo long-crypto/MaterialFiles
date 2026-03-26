@@ -82,8 +82,15 @@ class FileListAdapter(
     private var sizeMap = emptyMap<Path, Long>()
     var showSize = true
         set(value) {
+            if (field == value) {
+                return
+            }
             field = value
-            notifyItemRangeChanged(0, itemCount)
+            for (index in 0..<itemCount) {
+                if (getItem(index).attributes.isDirectory) {
+                    notifyItemChanged(index)
+                }
+            }
         }
 
     private lateinit var _nameEllipsize: TextUtils.TruncateAt
@@ -347,14 +354,10 @@ class FileListAdapter(
         } else {
             val context = holder.itemView.context
             val lastModificationTime = attributes.lastModifiedTime().toInstant().formatShort(context)
-            if (showSize) {
-                val size = attributes.fileSize.formatHumanReadable(context)
-                val descriptionSeparator =
-                    context.getString(R.string.file_item_description_separator)
-                listOf(lastModificationTime, size).joinToString(descriptionSeparator)
-            } else {
-                lastModificationTime
-            }
+            val size = attributes.fileSize.formatHumanReadable(context)
+            val descriptionSeparator =
+                context.getString(R.string.file_item_description_separator)
+            listOf(lastModificationTime, size).joinToString(descriptionSeparator)
         }
         val size = sizeMap[path]
         holder.sizeText.apply {
