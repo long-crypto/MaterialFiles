@@ -38,24 +38,55 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
         future?.cancel(true)
         value = Loading(value?.value)
         future = (AsyncTask.THREAD_POOL_EXECUTOR as ExecutorService).submit<Unit> {
-            val value = try {
-                path.newDirectoryStream().use { directoryStream ->
-                    val fileList = mutableListOf<FileItem>()
-                    for (path in directoryStream) {
-                        try {
-                            fileList.add(path.loadFileItem())
-                        } catch (e: DirectoryIteratorException) {
-                            // TODO: Ignoring such a file can be misleading and we need to support
-                            //  files without information.
-                            e.printStackTrace()
-                        } catch (e: IOException) {
-                            e.printStackTrace()
+            val value: Stateful<List<FileItem>> = run {
+                var result: Stateful<List<FileItem>>? = null
+                var retry: Boolean
+                do {
+                    retry = false
+                    try {
+                        path.newDirectoryStream().use { directoryStream ->
+                            val fileList = mutableListOf<FileItem>()
+                            for (path in directoryStream) {
+                                try {
+                                    fileList.add(path.loadFileItem())
+                                } catch (e: DirectoryIteratorException) {
+                                    // TODO: Ignoring such a file can be misleading and we need to support
+                                    //  files without information.
+                                    e.printStackTrace()
+                                } catch (e: IOException) {
+                                    e.printStackTrace()
+                                }
+                            }
+                            result = Success(fileList as List<FileItem>)
                         }
+                    } catch (e: me.zhanghai.android.files.provider.common.UserActionRequiredException) {
+                        val proceed: Boolean = try {
+                            kotlinx.coroutines.runBlocking {
+                                kotlin.coroutines.suspendCoroutine { continuation ->
+                                    val userAction = e.getUserAction(continuation, me.zhanghai.android.files.app.application)
+                                    me.zhanghai.android.files.app.BackgroundActivityStarter.startActivity(
+                                        userAction.intent,
+                                        userAction.title,
+                                        userAction.message,
+                                        me.zhanghai.android.files.app.application
+                                    )
+                                }
+                            }
+                        } catch (ie: InterruptedException) {
+                            result = Failure(valueCompat.value, java.io.InterruptedIOException().apply { initCause(ie) })
+                            false
+                        }
+                        if (proceed) {
+                            // User provided input (e.g., archive password). Retry loading.
+                            retry = true
+                        } else {
+                            result = Failure(valueCompat.value, e)
+                        }
+                    } catch (e: Exception) {
+                        result = Failure(valueCompat.value, e)
                     }
-                    Success(fileList as List<FileItem>)
-                }
-            } catch (e: Exception) {
-                Failure(valueCompat.value, e)
+                } while (retry && result == null)
+                result ?: Failure(valueCompat.value, IllegalStateException("Unknown error"))
             }
             postValue(value)
         }
