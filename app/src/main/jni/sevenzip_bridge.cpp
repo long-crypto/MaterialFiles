@@ -535,6 +535,12 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_extractE
         if (passwordRequested) {
           passwordRequired = true;
         }
+        // If password is required and no password attempt was defined, we can bail out early,
+        // letting the Java layer prompt for a password instead of continuing.
+        if (passwordRequested && !attempt.defined) {
+          ThrowSevenZipException(env, kErrorPasswordRequired, "Password required for this archive");
+          return;
+        }
         continue;
       }
 
@@ -584,8 +590,12 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_extractE
   }
 
   if (!entryFound) {
+    // If we couldn't even open the archive due to a missing/wrong password, signal that
+    // so the Android side can prompt the user for a password. Otherwise, report entry not found.
     ThrowSevenZipException(
-        env, kErrorEntryNotFound, "Archive entry not found");
+        env,
+        passwordRequired ? kErrorPasswordRequired : kErrorEntryNotFound,
+        passwordRequired ? "Incorrect password" : "Archive entry not found");
     return;
   }
 
