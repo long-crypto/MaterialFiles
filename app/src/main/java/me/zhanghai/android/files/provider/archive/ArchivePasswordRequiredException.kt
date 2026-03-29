@@ -25,8 +25,10 @@ class ArchivePasswordRequiredException(
     override fun getUserAction(continuation: Continuation<Boolean>, context: Context): UserAction {
         return UserAction(
             ArchivePasswordDialogActivity::class.createIntent().putArgs(
-                ArchivePasswordDialogFragment.Args(file) { continuation.resume(it) }
+                // Pass archive root path so dialog can add password to ArchiveFileSystem.
+                ArchivePasswordDialogFragment.Args(file.createArchiveRootPath()) { continuation.resume(it) }
             ), ArchivePasswordDialogFragment.getTitle(context),
+            // Keep message showing original archive file name.
             ArchivePasswordDialogFragment.getMessage(file, context)
         )
     }
