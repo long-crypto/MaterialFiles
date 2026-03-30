@@ -238,35 +238,59 @@ private fun FileJob.throwIfInterrupted() {
 
 @Throws(IOException::class)
 private fun FileJob.scan(sources: List<Path?>, @PluralsRes notificationTitleRes: Int): ScanInfo {
-    val scanInfo = ScanInfo()
-    for (source in sources) {
-        Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun preVisitDirectory(
-                directory: Path,
-                attributes: BasicFileAttributes
-            ): FileVisitResult {
-                scanPath(attributes, scanInfo, notificationTitleRes)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
+    var retry: Boolean
+    do {
+        retry = false
+        val scanInfo = ScanInfo()
+        try {
+            for (source in sources) {
+                Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
+                    @Throws(IOException::class)
+                    override fun preVisitDirectory(
+                        directory: Path,
+                        attributes: BasicFileAttributes
+                    ): FileVisitResult {
+                        scanPath(attributes, scanInfo, notificationTitleRes)
+                        throwIfInterrupted()
+                        return FileVisitResult.CONTINUE
+                    }
 
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                scanPath(attributes, scanInfo, notificationTitleRes)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
+                    @Throws(IOException::class)
+                    override fun visitFile(
+                        file: Path,
+                        attributes: BasicFileAttributes
+                    ): FileVisitResult {
+                        scanPath(attributes, scanInfo, notificationTitleRes)
+                        throwIfInterrupted()
+                        return FileVisitResult.CONTINUE
+                    }
 
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
+                    @Throws(IOException::class)
+                    override fun visitFileFailed(
+                        file: Path,
+                        exception: IOException
+                    ): FileVisitResult {
+                        // TODO: Prompt retry, skip, skip-all or abort.
+                        return super.visitFileFailed(file, exception)
+                    }
+                })
             }
-        })
-    }
-    postScanNotification(scanInfo, notificationTitleRes)
-    return scanInfo
+            postScanNotification(scanInfo, notificationTitleRes)
+            return scanInfo
+        } catch (e: InterruptedIOException) {
+            throw e
+        } catch (e: IOException) {
+            if (e is UserActionRequiredException) {
+                if (showUserAction(e)) {
+                    retry = true
+                    continue
+                }
+                throw InterruptedIOException().apply { initCause(e) }
+            }
+            throw e
+        }
+    } while (retry)
+    throw AssertionError()
 }
 
 @Throws(IOException::class)

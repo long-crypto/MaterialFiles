@@ -399,11 +399,10 @@ static bool TryOpenArchive(
   return true;
 }
 
-static bool IsPasswordFailure(Int32 operationResult, bool encrypted) {
+static bool IsPasswordFailure(Int32 operationResult) {
   return operationResult == NArchive::NExtract::NOperationResult::kWrongPassword
-      || (encrypted
-          && (operationResult == NArchive::NExtract::NOperationResult::kDataError
-              || operationResult == NArchive::NExtract::NOperationResult::kCRCError));
+      || operationResult == NArchive::NExtract::NOperationResult::kDataError
+      || operationResult == NArchive::NExtract::NOperationResult::kCRCError;
 }
 
 }  // namespace
@@ -559,8 +558,6 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_extractE
           continue;
         }
         entryFound = true;
-        const bool encrypted = GetBoolProperty(openResult.archive, index, kpidEncrypted, false);
-
         CSingleEntryExtractCallback *extractCallbackSpec = new CSingleEntryExtractCallback;
         CMyComPtr<IArchiveExtractCallback> extractCallback(extractCallbackSpec);
         extractCallbackSpec->PasswordIsDefined = attempt.defined;
@@ -575,10 +572,13 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_extractE
         }
 
         ::remove(targetPathUtf8.c_str());
-        if (extractCallbackSpec->PasswordWasRequested
-            && IsPasswordFailure(extractCallbackSpec->OperationResult, encrypted)) {
-          passwordRequired = true;
-          break;
+        if (extractCallbackSpec->PasswordWasRequested) {
+          // When no password is supplied, 7-Zip can abort extraction before reporting an
+          // operation result, so a password request alone is enough to prompt Android.
+          if (!attempt.defined || IsPasswordFailure(extractCallbackSpec->OperationResult)) {
+            passwordRequired = true;
+            break;
+          }
         }
 
         ThrowSevenZipException(
