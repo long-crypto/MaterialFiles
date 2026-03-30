@@ -249,15 +249,17 @@ static jlong GetTimePropertyMillisOrDefault(
 
 static jint GetEntryType(bool isDirectory, bool hasSymbolicLink, jint mode) {
   if (mode != kUnknownMode) {
-    switch (mode & S_IFMT) {
+    const jint modeType = mode & S_IFMT;
+    switch (modeType) {
       case S_IFDIR:
         return kTypeDirectory;
       case S_IFLNK:
         return kTypeSymbolicLink;
       case S_IFREG:
         return kTypeRegularFile;
-      default:
-        return kTypeUnknown;
+    }
+    if (modeType != 0) {
+      return kTypeUnknown;
     }
   }
   if (isDirectory) {
