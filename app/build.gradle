@@ -26,8 +26,8 @@ apply plugin: 'com.google.firebase.crashlytics'
 
 android {
     namespace 'me.zhanghai.android.files'
-    buildToolsVersion = '36.0.0'
-    compileSdk 36
+    buildToolsVersion = '37.0.0'
+    compileSdk = 37
     ndkVersion '28.1.13356709'
     defaultConfig {
         applicationId 'me.zhanghai.android.files'
