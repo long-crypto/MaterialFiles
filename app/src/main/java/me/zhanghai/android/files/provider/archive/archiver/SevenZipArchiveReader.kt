@@ -85,6 +85,11 @@ internal object SevenZipArchiveReader {
     private fun resolveArchiveFileOrNull(file: Path): Path? {
         val fileName = file.fileName?.toString() ?: return null
         val lowercaseFileName = fileName.lowercase(Locale.ROOT)
+        if (lowercaseFileName.endsWith(".7z.001") || lowercaseFileName.endsWith(".7z.002") ||
+            lowercaseFileName.endsWith(".zip.001") || lowercaseFileName.endsWith(".zip.002")
+        ) {
+            resolveNumberedArchive(file, fileName)?.let { return it }
+        }
         if (directSupportedSuffixes.any { lowercaseFileName.endsWith(it) }) {
             return when {
                 lowercaseFileName.endsWith(".r00") -> resolveOldStyleRarArchive(file, fileName)
