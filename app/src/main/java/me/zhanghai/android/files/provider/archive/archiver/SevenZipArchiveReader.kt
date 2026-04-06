@@ -20,6 +20,8 @@ import me.zhanghai.android.files.provider.common.PosixUser
 import me.zhanghai.android.files.provider.common.copyTo
 import me.zhanghai.android.files.provider.common.exists
 import me.zhanghai.android.files.provider.common.moveTo
+import me.zhanghai.android.files.provider.common.newInputStream
+import me.zhanghai.android.files.provider.common.newOutputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.toByteString
 import java.io.File
@@ -153,6 +155,9 @@ internal object SevenZipArchiveReader {
     @Throws(IOException::class)
     private fun getLocalArchiveFile(file: Path): File {
         val archiveFile = resolveArchiveFile(file)
+        getNumberedArchiveInfoOrNull(archiveFile)?.let {
+            return getLocalNumberedArchiveFile(archiveFile, it)
+        }
         return when (getMultipartArchiveInfoOrNull(archiveFile)) {
             null -> getLocalSingleArchiveFile(archiveFile)
             else -> getLocalMultipartArchiveFile(archiveFile)
@@ -199,6 +204,56 @@ internal object SevenZipArchiveReader {
             }
         }
         return cachedFile
+    }
+
+    @Throws(IOException::class)
+    private fun getLocalNumberedArchiveFile(file: Path, info: MultipartArchiveInfo): File {
+        val cacheDirectory = getCacheDirectory()
+        val hash = buildString {
+            append(file.fileSystem.provider().scheme)
+            append(':')
+            append(file.parent)
+            append('/')
+            append(info.baseName)
+            append('#')
+            append(info.extension)
+        }.sha256Hex()
+        val cachePrefix = "${hash}_"
+        val state = info.volumeNames.joinToString(separator = "|") { volumeName ->
+            val volume = file.resolveSibling(volumeName)
+            val attributes = volume.readAttributes(BasicFileAttributes::class.java)
+            "$volumeName:${attributes.lastModifiedTime().toMillis()}:${attributes.size()}"
+        }
+        val cachedFile = File(cacheDirectory, "$cachePrefix${state.sha256Hex()}.${info.extension}")
+        if (cachedFile.isFile) {
+            return cachedFile
+        }
+        cacheDirectory.listFiles()?.forEach {
+            if (it.name.startsWith(cachePrefix)) {
+                it.deleteRecursively()
+            }
+        }
+        val tempFile = File.createTempFile(cachePrefix, ".${info.extension}", cacheDirectory)
+        val tempPath = Paths.get(tempFile.path)
+        val cachedPath = Paths.get(cachedFile.path)
+        var successful = false
+        try {
+            tempPath.newOutputStream().use { outputStream ->
+                for (volumeName in info.volumeNames) {
+                    val source = file.resolveSibling(volumeName)
+                    source.newInputStream().use { inputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+            }
+            tempPath.moveTo(cachedPath, StandardCopyOption.REPLACE_EXISTING)
+            successful = true
+            return cachedFile
+        } finally {
+            if (!successful) {
+                tempFile.delete()
+            }
+        }
     }
 
     @Throws(IOException::class)
@@ -255,6 +310,15 @@ internal object SevenZipArchiveReader {
         }
     }
 
+    private fun getNumberedArchiveInfoOrNull(file: Path): MultipartArchiveInfo? {
+        val fileName = file.fileName?.toString() ?: return null
+        val match = matchNumberedArchive(fileName) ?: return null
+        if (match.extension !in supportedNumberedExtensions) {
+            return null
+        }
+        return collectNumberedVolumes(file, fileName)
+    }
+
     private fun getMultipartArchiveInfoOrNull(file: Path): MultipartArchiveInfo? {
         val fileName = file.fileName?.toString() ?: return null
         return when {
@@ -263,7 +327,6 @@ internal object SevenZipArchiveReader {
                 OLD_STYLE_RAR_PART_REGEX.matches(fileName) -> collectOldStyleRarVolumes(file, fileName)
             fileName.lowercase(Locale.ROOT).endsWith(".zip") ||
                 OLD_STYLE_ZIP_PART_REGEX.matches(fileName) -> collectOldStyleZipVolumes(file, fileName)
-            matchNumberedArchive(fileName) != null -> collectNumberedVolumes(file, fileName)
             else -> null
         }
     }
