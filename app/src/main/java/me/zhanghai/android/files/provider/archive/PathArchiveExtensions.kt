@@ -7,6 +7,7 @@ package me.zhanghai.android.files.provider.archive
 
 import java8.nio.file.Path
 import java8.nio.file.ProviderMismatchException
+import me.zhanghai.android.files.provider.archive.archiver.SevenZipArchiveReader
 
 fun Path.archiveAddPassword(password: String) {
     this as? ArchivePath ?: throw ProviderMismatchException(toString())
@@ -25,4 +26,7 @@ fun Path.archiveRefresh() {
 }
 
 fun Path.createArchiveRootPath(): Path =
-    ArchiveFileSystemProvider.getOrNewFileSystem(this).rootDirectory
+    ArchiveFileSystemProvider.getOrNewFileSystem(resolveArchiveFile()).rootDirectory
+
+fun Path.resolveArchiveFile(): Path =
+    SevenZipArchiveReader.resolveArchiveFileOrSame(this)

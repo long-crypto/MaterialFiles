@@ -9,6 +9,7 @@ import java8.nio.file.Path
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.isSupportedArchive
 import me.zhanghai.android.files.provider.archive.archiveFile
+import me.zhanghai.android.files.provider.archive.archiver.SevenZipArchiveReader
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.provider.document.isDocumentPath
 import me.zhanghai.android.files.provider.document.resolver.DocumentResolver
@@ -19,7 +20,8 @@ val Path.name: String
 
 fun Path.toUserFriendlyString(): String = if (isLinuxPath) toFile().path else toUri().toString()
 
-fun Path.isArchiveFile(mimeType: MimeType): Boolean = !isArchivePath && mimeType.isSupportedArchive
+fun Path.isArchiveFile(mimeType: MimeType): Boolean =
+    !isArchivePath && (mimeType.isSupportedArchive || SevenZipArchiveReader.supports(this))
 
 val Path.isLocalPath: Boolean
     get() =
