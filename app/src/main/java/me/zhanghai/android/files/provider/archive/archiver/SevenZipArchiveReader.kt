@@ -85,10 +85,8 @@ internal object SevenZipArchiveReader {
     private fun resolveArchiveFileOrNull(file: Path): Path? {
         val fileName = file.fileName?.toString() ?: return null
         val lowercaseFileName = fileName.lowercase(Locale.ROOT)
-        if (lowercaseFileName.endsWith(".7z.001") || lowercaseFileName.endsWith(".7z.002") ||
-            lowercaseFileName.endsWith(".zip.001") || lowercaseFileName.endsWith(".zip.002")
-        ) {
-            resolveNumberedArchive(file, fileName)?.let { return it }
+        matchNumberedArchive(fileName)?.let { match ->
+            resolveNumberedArchive(file, match)?.let { return it }
         }
         if (directSupportedSuffixes.any { lowercaseFileName.endsWith(it) }) {
             return when {
@@ -97,23 +95,17 @@ internal object SevenZipArchiveReader {
                 else -> file
             }
         }
-        if (lowercaseFileName.endsWith(".zip") && collectOldStyleZipVolumes(file, fileName) != null) {
+        if (lowercaseFileName.endsWith(".zip") && collectOldStyleZipVolumes(file, lowercaseFileName) != null) {
             return file
         }
-        if (OLD_STYLE_RAR_PART_REGEX.matches(fileName)) {
+        if (OLD_STYLE_RAR_PART_REGEX.matches(lowercaseFileName)) {
             return resolveOldStyleRarArchive(file, fileName)
         }
-        if (OLD_STYLE_ZIP_PART_REGEX.matches(fileName)) {
+        if (OLD_STYLE_ZIP_PART_REGEX.matches(lowercaseFileName)) {
             return resolveOldStyleZipArchive(file, fileName)
         }
         resolvePartRarArchive(file, fileName)?.let { return it }
-        resolveNumberedArchive(file, fileName)?.let { return it }
         return null
-    }
-
-    private fun isSupportedNumberedArchiveBaseName(baseName: String): Boolean {
-        val extension = baseName.substringAfterLast('.', "").lowercase(Locale.ROOT)
-        return extension in supportedNumberedExtensions
     }
 
     private fun resolveOldStyleZipArchive(file: Path, fileName: String): Path {
@@ -122,22 +114,16 @@ internal object SevenZipArchiveReader {
         return mainFile.takeIf { it.exists() } ?: file
     }
 
-    private fun resolveNumberedArchive(file: Path, fileName: String): Path? {
-        val match = NUMBERED_ARCHIVE_REGEX.matchEntire(fileName) ?: return null
-        val baseName = match.groupValues[1]
-        if (!isSupportedNumberedArchiveBaseName(baseName)) {
-            return null
-        }
-        val number = match.groupValues[2].toIntOrNull() ?: return null
-        val mainFile = file.resolveSibling("$baseName.001")
-        val secondFile = file.resolveSibling("$baseName.002")
+    private fun resolveNumberedArchive(file: Path, match: NumberedArchiveMatch): Path? {
+        val mainFile = file.resolveSibling("${match.baseName}.001")
+        val secondFile = file.resolveSibling("${match.baseName}.002")
         if (!mainFile.exists() || !secondFile.exists()) {
             return null
         }
-        if (number == 1) {
+        if (match.number == 1) {
             return mainFile
         }
-        val previousFile = file.resolveSibling("$baseName.${(number - 1).toString().padStart(3, '0')}")
+        val previousFile = file.resolveSibling("${match.baseName}.${(match.number - 1).toString().padStart(3, '0')}")
         if (!previousFile.exists()) {
             return null
         }
@@ -277,7 +263,7 @@ internal object SevenZipArchiveReader {
                 OLD_STYLE_RAR_PART_REGEX.matches(fileName) -> collectOldStyleRarVolumes(file, fileName)
             fileName.lowercase(Locale.ROOT).endsWith(".zip") ||
                 OLD_STYLE_ZIP_PART_REGEX.matches(fileName) -> collectOldStyleZipVolumes(file, fileName)
-            NUMBERED_ARCHIVE_REGEX.matches(fileName) -> collectNumberedVolumes(file, fileName)
+            matchNumberedArchive(fileName) != null -> collectNumberedVolumes(file, fileName)
             else -> null
         }
     }
@@ -356,19 +342,15 @@ internal object SevenZipArchiveReader {
     }
 
     private fun collectNumberedVolumes(file: Path, fileName: String): MultipartArchiveInfo? {
-        val match = NUMBERED_ARCHIVE_REGEX.matchEntire(fileName) ?: return null
-        val baseName = match.groupValues[1]
-        if (!isSupportedNumberedArchiveBaseName(baseName)) {
-            return null
-        }
-        val firstVolume = "$baseName.001"
+        val match = matchNumberedArchive(fileName) ?: return null
+        val firstVolume = "${match.baseName}.001"
         if (!file.resolveSibling(firstVolume).exists()) {
             return null
         }
         val volumeNames = mutableListOf<String>()
         var index = 1
         while (true) {
-            val volumeName = "$baseName.${index.toString().padStart(3, '0')}"
+            val volumeName = "${match.baseName}.${index.toString().padStart(3, '0')}"
             if (!file.resolveSibling(volumeName).exists()) {
                 break
             }
@@ -378,11 +360,14 @@ internal object SevenZipArchiveReader {
         if (volumeNames.size <= 1) {
             return null
         }
-        val extension = baseName.substringAfterLast('.', "")
-            .takeIf { it.isNotEmpty() }
-            ?: return null
-        return MultipartArchiveInfo(baseName, extension, firstVolume, volumeNames)
+        return MultipartArchiveInfo(match.baseName, match.extension, firstVolume, volumeNames)
     }
+
+    private data class NumberedArchiveMatch(
+        val baseName: String,
+        val extension: String,
+        val number: Int
+    )
 
     private data class MultipartArchiveInfo(
         val baseName: String,
@@ -391,10 +376,19 @@ internal object SevenZipArchiveReader {
         val volumeNames: List<String>
     )
 
+    private fun matchNumberedArchive(fileName: String): NumberedArchiveMatch? {
+        val match = NUMBERED_ARCHIVE_REGEX.matchEntire(fileName) ?: return null
+        val extensionPart = match.groupValues[2]
+        val extension = extensionPart.lowercase(Locale.ROOT)
+        val baseName = "${match.groupValues[1]}.$extensionPart"
+        val number = match.groupValues[3].toIntOrNull() ?: return null
+        return NumberedArchiveMatch(baseName, extension, number)
+    }
+
     private val PART_RAR_REGEX = Regex("(?i)(.+)\\.part(\\d+)\\.rar")
     private val OLD_STYLE_RAR_PART_REGEX = Regex("(?i).+\\.r\\d{2}")
     private val OLD_STYLE_ZIP_PART_REGEX = Regex("(?i).+\\.z\\d{2}")
-    private val NUMBERED_ARCHIVE_REGEX = Regex("(?i)(.+)\\.(\\d{3})")
+    private val NUMBERED_ARCHIVE_REGEX = Regex("(?i)(.+)\\.(7z|zip)\\.(\\d{3})")
     private val supportedNumberedExtensions = setOf("7z", "zip")
 
     private fun getCacheDirectory(): File =
