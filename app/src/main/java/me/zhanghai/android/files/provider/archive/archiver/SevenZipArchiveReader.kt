@@ -34,7 +34,7 @@ import kotlin.io.deleteRecursively
 import kotlin.math.max
 
 internal object SevenZipArchiveReader {
-    private val directSupportedSuffixes = setOf(".7z", ".rar", ".r00")
+    private val directSupportedSuffixes = setOf(".7z", ".gz", ".gzip", ".rar", ".r00")
 
     @Throws(IOException::class)
     fun readEntries(file: Path, passwords: List<String>): List<ArchiveFileEntry> {

@@ -50,6 +50,8 @@ static const GUID CLSID_Format7z = {
     0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0x07, 0x00, 0x00}};
 static const GUID CLSID_FormatZip = {
     0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0x01, 0x00, 0x00}};
+static const GUID CLSID_FormatGz = {
+    0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0xEF, 0x00, 0x00}};
 static const GUID CLSID_FormatRar = {
     0x23170F69, 0x40C1, 0x278A, {0x10, 0x00, 0x00, 0x01, 0x10, 0x03, 0x00, 0x00}};
 static const GUID CLSID_FormatRar5 = {
@@ -178,11 +180,15 @@ static std::vector<const GUID *> GetCandidateFormats(const std::string &archiveP
   if (lowerPath.size() >= 4 && lowerPath.rfind(".zip") == lowerPath.size() - 4) {
     return {&CLSID_FormatZip};
   }
+  if ((lowerPath.size() >= 3 && lowerPath.rfind(".gz") == lowerPath.size() - 3)
+      || (lowerPath.size() >= 5 && lowerPath.rfind(".gzip") == lowerPath.size() - 5)) {
+    return {&CLSID_FormatGz};
+  }
   if ((lowerPath.size() >= 4 && lowerPath.rfind(".rar") == lowerPath.size() - 4)
       || (lowerPath.size() >= 4 && lowerPath.rfind(".r00") == lowerPath.size() - 4)) {
     return {&CLSID_FormatRar5, &CLSID_FormatRar};
   }
-  return {&CLSID_Format7z, &CLSID_FormatZip, &CLSID_FormatRar5, &CLSID_FormatRar};
+  return {&CLSID_Format7z, &CLSID_FormatZip, &CLSID_FormatGz, &CLSID_FormatRar5, &CLSID_FormatRar};
 }
 
 static jlong FileTimeToUnixMillis(const FILETIME &fileTime) {
