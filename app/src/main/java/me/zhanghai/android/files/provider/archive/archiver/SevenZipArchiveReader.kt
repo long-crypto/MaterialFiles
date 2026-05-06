@@ -210,9 +210,6 @@ internal object SevenZipArchiveReader {
 
     @Throws(IOException::class)
     private fun getLocalMultipartArchiveFile(file: Path, info: MultipartArchiveInfo): File {
-        if (file.isLinuxPath) {
-            return file.toFile()
-        }
         val cacheDirectory = getCacheDirectory()
         val hash = buildString {
             append(file.fileSystem.provider().scheme)
