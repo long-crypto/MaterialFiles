@@ -187,6 +187,216 @@ static std::string JoinPathUtf8(const std::string &directory, const std::string 
   return directory + "/" + name;
 }
 
+static bool ParseNumberedSplitArchivePath(
+    const std::string &archivePathUtf8, std::string &pathPrefixUtf8, std::string &extension,
+    unsigned &numberWidth) {
+  const size_t lastDot = archivePathUtf8.rfind('.');
+  if (lastDot == std::string::npos || lastDot + 1 >= archivePathUtf8.size()) {
+    return false;
+  }
+  const std::string numberSuffix = archivePathUtf8.substr(lastDot + 1);
+  if (numberSuffix.size() < 3) {
+    return false;
+  }
+  for (char ch : numberSuffix) {
+    if (!std::isdigit(static_cast<unsigned char>(ch))) {
+      return false;
+    }
+  }
+  const size_t extensionDot = archivePathUtf8.rfind('.', lastDot - 1);
+  if (extensionDot == std::string::npos || extensionDot + 1 >= lastDot) {
+    return false;
+  }
+  extension = archivePathUtf8.substr(extensionDot + 1, lastDot - extensionDot - 1);
+  std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  if (extension != "7z" && extension != "zip") {
+    return false;
+  }
+  pathPrefixUtf8 = archivePathUtf8.substr(0, lastDot + 1);
+  numberWidth = static_cast<unsigned>(numberSuffix.size());
+  return true;
+}
+
+static std::string BuildNumberedVolumePathUtf8(
+    const std::string &pathPrefixUtf8, unsigned index, unsigned numberWidth) {
+  char numberBuffer[32];
+  snprintf(numberBuffer, sizeof(numberBuffer), "%u", index);
+  std::string number(numberBuffer);
+  if (number.size() < numberWidth) {
+    number.insert(0, numberWidth - number.size(), '0');
+  }
+  return pathPrefixUtf8 + number;
+}
+
+class CNumberedSplitConcatInStream Z7_final : public IInStream,
+                                              public IStreamGetSize,
+                                              public CMyUnknownImp {
+  Z7_IFACES_IMP_UNK_3(IInStream, ISequentialInStream, IStreamGetSize)
+
+ public:
+  std::vector<FString> volumePaths;
+  std::vector<UInt64> volumeStarts;
+  std::vector<UInt64> volumeSizes;
+  UInt64 totalSize = 0;
+  UInt64 position = 0;
+
+ private:
+  size_t currentVolumeIndex = static_cast<size_t>(-1);
+  UInt64 currentVolumeOffset = 0;
+  CMyComPtr<IInStream> currentStream;
+
+ public:
+  void AddVolume(const FString &path, UInt64 size) {
+    volumePaths.push_back(path);
+    volumeStarts.push_back(totalSize);
+    volumeSizes.push_back(size);
+    totalSize += size;
+  }
+
+  size_t FindVolumeIndex(UInt64 position_) const {
+    if (position_ >= totalSize || volumeStarts.empty()) {
+      return static_cast<size_t>(-1);
+    }
+    const auto it = std::upper_bound(volumeStarts.begin(), volumeStarts.end(), position_);
+    return static_cast<size_t>(it - volumeStarts.begin() - 1);
+  }
+
+  HRESULT EnsureVolumeOpen(size_t volumeIndex, UInt64 offsetInVolume) {
+    if (currentVolumeIndex != volumeIndex || !currentStream) {
+      auto *fileStreamSpec = new CInFileStream;
+      CMyComPtr<IInStream> volumeStream(fileStreamSpec);
+      if (!fileStreamSpec->Open(volumePaths[volumeIndex])) {
+        return E_FAIL;
+      }
+      currentStream = volumeStream;
+      currentVolumeIndex = volumeIndex;
+      currentVolumeOffset = 0;
+    }
+    if (currentVolumeOffset != offsetInVolume) {
+      RINOK(currentStream->Seek(static_cast<Int64>(offsetInVolume), STREAM_SEEK_SET, nullptr))
+      currentVolumeOffset = offsetInVolume;
+    }
+    return S_OK;
+  }
+};
+
+Z7_COM7F_IMF(CNumberedSplitConcatInStream::Read(void *data, UInt32 size, UInt32 *processedSize)) {
+  UInt32 totalProcessed = 0;
+  Byte *buffer = static_cast<Byte *>(data);
+  while (size != 0 && position < totalSize) {
+    const size_t volumeIndex = FindVolumeIndex(position);
+    if (volumeIndex == static_cast<size_t>(-1)) {
+      break;
+    }
+    const UInt64 offsetInVolume = position - volumeStarts[volumeIndex];
+    const UInt64 remainingInVolume = volumeSizes[volumeIndex] - offsetInVolume;
+    const UInt32 chunkSize = static_cast<UInt32>(
+        std::min<UInt64>(remainingInVolume, static_cast<UInt64>(size)));
+    RINOK(EnsureVolumeOpen(volumeIndex, offsetInVolume))
+    UInt32 chunkProcessed = 0;
+    const HRESULT hr = currentStream->Read(buffer + totalProcessed, chunkSize, &chunkProcessed);
+    currentVolumeOffset = offsetInVolume + chunkProcessed;
+    position += chunkProcessed;
+    totalProcessed += chunkProcessed;
+    size -= chunkProcessed;
+    if (hr != S_OK) {
+      if (processedSize) {
+        *processedSize = totalProcessed;
+      }
+      return hr;
+    }
+    if (chunkProcessed != chunkSize) {
+      if (processedSize) {
+        *processedSize = totalProcessed;
+      }
+      return S_FALSE;
+    }
+  }
+  if (processedSize) {
+    *processedSize = totalProcessed;
+  }
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CNumberedSplitConcatInStream::Seek(
+    Int64 offset, UInt32 seekOrigin, UInt64 *newPosition)) {
+  Int64 absolutePosition = 0;
+  switch (seekOrigin) {
+    case STREAM_SEEK_SET:
+      absolutePosition = offset;
+      break;
+    case STREAM_SEEK_CUR:
+      absolutePosition = static_cast<Int64>(position) + offset;
+      break;
+    case STREAM_SEEK_END:
+      absolutePosition = static_cast<Int64>(totalSize) + offset;
+      break;
+    default:
+      return STG_E_INVALIDFUNCTION;
+  }
+  if (absolutePosition < 0 || static_cast<UInt64>(absolutePosition) > totalSize) {
+    return STG_E_INVALIDFUNCTION;
+  }
+  position = static_cast<UInt64>(absolutePosition);
+  if (position == totalSize) {
+    currentStream.Release();
+    currentVolumeIndex = static_cast<size_t>(-1);
+    currentVolumeOffset = 0;
+  } else {
+    currentVolumeOffset = static_cast<UInt64>(-1);
+  }
+  if (newPosition) {
+    *newPosition = position;
+  }
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CNumberedSplitConcatInStream::GetSize(UInt64 *size)) {
+  *size = totalSize;
+  return S_OK;
+}
+
+static bool TryCreateNumberedSplitConcatStream(
+    const std::string &archivePathUtf8, const GUID &format, CMyComPtr<IInStream> &stream,
+    UInt64 &size, std::string &errorMessage) {
+  std::string pathPrefixUtf8;
+  std::string extension;
+  unsigned numberWidth = 0;
+  if (!ParseNumberedSplitArchivePath(archivePathUtf8, pathPrefixUtf8, extension, numberWidth)) {
+    return false;
+  }
+  const bool formatMatches =
+      (extension == "7z" && &format == &CLSID_Format7z)
+      || (extension == "zip" && &format == &CLSID_FormatZip);
+  if (!formatMatches) {
+    return false;
+  }
+
+  auto *concatStreamSpec = new CNumberedSplitConcatInStream;
+  CMyComPtr<IInStream> concatStream(concatStreamSpec);
+  for (unsigned index = 1;; ++index) {
+    const std::string volumePathUtf8 =
+        BuildNumberedVolumePathUtf8(pathPrefixUtf8, index, numberWidth);
+    struct stat st;
+    if (stat(volumePathUtf8.c_str(), &st) != 0) {
+      break;
+    }
+    if (!S_ISREG(st.st_mode)) {
+      errorMessage = "Split archive volume is not a regular file";
+      return false;
+    }
+    concatStreamSpec->AddVolume(Utf8ToFString(volumePathUtf8), static_cast<UInt64>(st.st_size));
+  }
+  if (concatStreamSpec->volumePaths.size() <= 1) {
+    return false;
+  }
+  stream = concatStream;
+  size = concatStreamSpec->totalSize;
+  return true;
+}
+
 static jstring UStringToJString(JNIEnv *env, const UString &value) {
   AString utf8;
   UnicodeStringToMultiByte2(utf8, value, CP_UTF8);
@@ -494,13 +704,17 @@ static bool TryOpenArchive(
     return false;
   }
   result.archive.Attach(archiveSpec);
-  auto *fileStreamSpec = new CInFileStream;
-  result.stream.Attach(fileStreamSpec);
-  if (!fileStreamSpec->Open(archivePath)) {
-    errorMessage = "Cannot open archive file";
-    result.archive.Release();
-    result.stream.Release();
-    return false;
+  UInt64 archiveFileSize = 0;
+  if (!TryCreateNumberedSplitConcatStream(archivePathUtf8, format, result.stream, archiveFileSize, errorMessage)) {
+    auto *fileStreamSpec = new CInFileStream;
+    result.stream.Attach(fileStreamSpec);
+    if (!fileStreamSpec->Open(archivePath)) {
+      errorMessage = "Cannot open archive file";
+      result.archive.Release();
+      result.stream.Release();
+      return false;
+    }
+    fileStreamSpec->GetSize(&archiveFileSize);
   }
   COpenCallback *openCallbackSpec = new COpenCallback;
   CMyComPtr<IArchiveOpenCallback> openCallback(openCallbackSpec);
@@ -508,7 +722,7 @@ static bool TryOpenArchive(
   openCallbackSpec->Password = attempt.value;
   openCallbackSpec->ArchiveFileName = Utf8ToUString(GetBaseNameUtf8(archivePathUtf8));
   openCallbackSpec->ArchiveDirectoryPathUtf8 = GetParentPathUtf8(archivePathUtf8);
-  fileStreamSpec->GetSize(&openCallbackSpec->ArchiveFileSize);
+  openCallbackSpec->ArchiveFileSize = archiveFileSize;
   result.openCallback = openCallback;
   const HRESULT hr = result.archive->Open(result.stream, nullptr, openCallback);
   passwordRequested = openCallbackSpec->PasswordWasRequested;
