@@ -11,6 +11,7 @@ import java8.nio.file.Path
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.provider.common.PosixFileMode
 import me.zhanghai.android.files.provider.common.PosixFileType
+import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.provider.root.isRunningAsRoot
 import me.zhanghai.android.files.provider.root.rootContext
 import me.zhanghai.android.files.settings.Settings
@@ -84,6 +85,26 @@ object ArchiveReader {
             else -> LibarchiveArchiveReader.newInputStream(
                 file, passwords, entry, archiveFileNameCharset
             )
+        }
+
+    @Throws(IOException::class)
+    fun extractTo(
+        file: Path,
+        passwords: List<String>,
+        entry: ArchiveFileEntry,
+        target: Path,
+        replaceExisting: Boolean
+    ): Boolean =
+        when {
+            SevenZipArchiveReader.supports(file) && target.isLinuxPath -> {
+                if (entry.isDirectory || entry.isSymbolicLink) {
+                    false
+                } else {
+                    SevenZipArchiveReader.extractTo(file, passwords, entry, target, replaceExisting)
+                    true
+                }
+            }
+            else -> false
         }
 
     private fun createDirectoryEntry(name: String): ArchiveFileEntry {

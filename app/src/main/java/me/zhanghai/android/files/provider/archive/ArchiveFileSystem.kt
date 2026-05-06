@@ -84,6 +84,14 @@ internal class ArchiveFileSystem(
         }
 
     @Throws(IOException::class)
+    fun extractTo(file: Path, target: Path, replaceExisting: Boolean): Boolean =
+        synchronized(lock) {
+            ensureEntriesLocked(file)
+            val entry = getEntryLocked(file)
+            ArchiveReader.extractTo(archiveFile, passwords, entry, target, replaceExisting)
+        }
+
+    @Throws(IOException::class)
     fun getDirectoryChildren(directory: Path): List<Path> =
         synchronized(lock) {
             ensureEntriesLocked(directory)

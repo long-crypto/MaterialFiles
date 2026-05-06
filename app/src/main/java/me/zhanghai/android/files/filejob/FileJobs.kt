@@ -40,6 +40,7 @@ import me.zhanghai.android.files.file.loadFileItem
 import me.zhanghai.android.files.filelist.OpenFileAsDialogActivity
 import me.zhanghai.android.files.filelist.OpenFileAsDialogFragment
 import me.zhanghai.android.files.provider.archive.archiveFile
+import me.zhanghai.android.files.provider.archive.archiveExtractTo
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveWriter
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
@@ -1318,12 +1319,16 @@ private fun FileJob.copyOrMove(
         }.toTypedArray()
         try {
             postCopyMoveNotification(transferInfo, source, type)
-            if (useCopy) {
+            if (useCopy && !copyAttributes
+                && tryDirectArchiveExtraction(source, target, replaceExisting)) {
+                transferInfo.addTransferredFile(target)
+            } else if (useCopy) {
                 source.copyTo(target, *options)
+                transferInfo.incrementTransferredFileCount()
             } else {
                 source.moveTo(target, *options)
+                transferInfo.incrementTransferredFileCount()
             }
-            transferInfo.incrementTransferredFileCount()
             postCopyMoveNotification(transferInfo, source, type)
         } catch (e: FileAlreadyExistsException) {
             val sourceFile = source.loadFileItem()
@@ -1610,6 +1615,14 @@ private fun FileJob.rename(path: Path, newPath: Path) {
             }
         }
     } while (retry)
+}
+
+@Throws(IOException::class)
+private fun tryDirectArchiveExtraction(source: Path, target: Path, replaceExisting: Boolean): Boolean {
+    if (!source.isArchivePath || !target.isLinuxPath) {
+        return false
+    }
+    return source.archiveExtractTo(target, replaceExisting)
 }
 
 class RestoreFileSeLinuxContextJob(

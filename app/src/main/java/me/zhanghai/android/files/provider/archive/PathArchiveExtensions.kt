@@ -25,6 +25,12 @@ fun Path.archiveRefresh() {
     fileSystem.refresh()
 }
 
+@Throws(java.io.IOException::class)
+fun Path.archiveExtractTo(target: Path, replaceExisting: Boolean = false): Boolean {
+    this as? ArchivePath ?: throw ProviderMismatchException(toString())
+    return fileSystem.extractTo(this, target, replaceExisting)
+}
+
 fun Path.createArchiveRootPath(): Path =
     ArchiveFileSystemProvider.getOrNewFileSystem(resolveArchiveFile()).rootDirectory
 

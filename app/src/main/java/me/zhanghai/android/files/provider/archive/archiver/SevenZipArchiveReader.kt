@@ -5,7 +5,9 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
+import java8.nio.file.FileAlreadyExistsException
 import java8.nio.file.FileSystemException
+import java8.nio.file.LinkOption
 import java8.nio.file.Path
 import java8.nio.file.Paths
 import java8.nio.file.StandardCopyOption
@@ -62,17 +64,69 @@ internal object SevenZipArchiveReader {
         val tempFile = File.createTempFile("sevenzip-entry-", suffix, cacheDirectory)
         var successful = false
         try {
-            SevenZipBridge.extractEntry(
-                localArchiveFile.path, passwords.toTypedArray(), entry.name, tempFile.path
-            )
+            extractEntry(archiveFile, localArchiveFile, passwords, entry, tempFile)
             successful = true
             return DeleteOnCloseFileInputStream(tempFile)
-        } catch (e: SevenZipNativeException) {
-            throw e.toFileSystemException(archiveFile)
         } finally {
             if (!successful) {
                 tempFile.delete()
             }
+        }
+    }
+
+    @Throws(IOException::class)
+    fun extractTo(
+        file: Path,
+        passwords: List<String>,
+        entry: ArchiveFileEntry,
+        target: Path,
+        replaceExisting: Boolean
+    ) {
+        val archiveFile = resolveArchiveFile(file)
+        val localArchiveFile = getLocalArchiveFile(archiveFile)
+        if (target.exists(LinkOption.NOFOLLOW_LINKS)) {
+            if (!replaceExisting
+                || target.readAttributes(
+                    BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
+                ).isDirectory) {
+                throw FileAlreadyExistsException(target.toString())
+            }
+        }
+        val targetFile = target.toFile()
+        val tempFile = File.createTempFile(
+            "sevenzip-entry-", ".tmp", targetFile.absoluteFile.parentFile
+        )
+        val tempPath = Paths.get(tempFile.path)
+        var successful = false
+        try {
+            extractEntry(archiveFile, localArchiveFile, passwords, entry, tempFile)
+            if (replaceExisting) {
+                tempPath.moveTo(target, StandardCopyOption.REPLACE_EXISTING)
+            } else {
+                tempPath.moveTo(target)
+            }
+            successful = true
+        } finally {
+            if (!successful) {
+                tempFile.delete()
+            }
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun extractEntry(
+        archiveFile: Path,
+        localArchiveFile: File,
+        passwords: List<String>,
+        entry: ArchiveFileEntry,
+        targetFile: File
+    ) {
+        try {
+            SevenZipBridge.extractEntry(
+                localArchiveFile.path, passwords.toTypedArray(), entry.name, targetFile.path
+            )
+        } catch (e: SevenZipNativeException) {
+            throw e.toFileSystemException(archiveFile)
         }
     }
 
