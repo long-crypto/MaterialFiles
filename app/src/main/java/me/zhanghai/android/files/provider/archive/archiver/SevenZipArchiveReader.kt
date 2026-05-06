@@ -20,10 +20,9 @@ import me.zhanghai.android.files.provider.common.PosixUser
 import me.zhanghai.android.files.provider.common.copyTo
 import me.zhanghai.android.files.provider.common.exists
 import me.zhanghai.android.files.provider.common.moveTo
-import me.zhanghai.android.files.provider.common.newInputStream
-import me.zhanghai.android.files.provider.common.newOutputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.toByteString
+import me.zhanghai.android.files.provider.linux.isLinuxPath
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -117,15 +116,15 @@ internal object SevenZipArchiveReader {
     }
 
     private fun resolveNumberedArchive(file: Path, match: NumberedArchiveMatch): Path? {
-        val mainFile = file.resolveSibling("${match.baseName}.001")
-        val secondFile = file.resolveSibling("${match.baseName}.002")
+        val mainFile = file.resolveSibling(match.getVolumeName(1))
+        val secondFile = file.resolveSibling(match.getVolumeName(2))
         if (!mainFile.exists() || !secondFile.exists()) {
             return null
         }
         if (match.number == 1) {
             return mainFile
         }
-        val previousFile = file.resolveSibling("${match.baseName}.${(match.number - 1).toString().padStart(3, '0')}")
+        val previousFile = file.resolveSibling(match.getVolumeName(match.number - 1))
         if (!previousFile.exists()) {
             return null
         }
@@ -155,17 +154,20 @@ internal object SevenZipArchiveReader {
     @Throws(IOException::class)
     private fun getLocalArchiveFile(file: Path): File {
         val archiveFile = resolveArchiveFile(file)
-        getNumberedArchiveInfoOrNull(archiveFile)?.let {
-            return getLocalNumberedArchiveFile(archiveFile, it)
+        getNumberedArchiveInfoOrNull(archiveFile)?.let { info ->
+            return getLocalMultipartArchiveFile(archiveFile, info)
         }
-        return when (getMultipartArchiveInfoOrNull(archiveFile)) {
-            null -> getLocalSingleArchiveFile(archiveFile)
-            else -> getLocalMultipartArchiveFile(archiveFile)
+        getMultipartArchiveInfoOrNull(archiveFile)?.let { info ->
+            return getLocalMultipartArchiveFile(archiveFile, info)
         }
+        return getLocalSingleArchiveFile(archiveFile)
     }
 
     @Throws(IOException::class)
     private fun getLocalSingleArchiveFile(file: Path): File {
+        if (file.isLinuxPath) {
+            return file.toFile()
+        }
         val attributes = file.readAttributes(BasicFileAttributes::class.java)
         val cacheDirectory = getCacheDirectory()
         val sourceKey = buildString {
@@ -207,59 +209,10 @@ internal object SevenZipArchiveReader {
     }
 
     @Throws(IOException::class)
-    private fun getLocalNumberedArchiveFile(file: Path, info: MultipartArchiveInfo): File {
-        val cacheDirectory = getCacheDirectory()
-        val hash = buildString {
-            append(file.fileSystem.provider().scheme)
-            append(':')
-            append(file.parent)
-            append('/')
-            append(info.baseName)
-            append('#')
-            append(info.extension)
-        }.sha256Hex()
-        val cachePrefix = "${hash}_"
-        val state = info.volumeNames.joinToString(separator = "|") { volumeName ->
-            val volume = file.resolveSibling(volumeName)
-            val attributes = volume.readAttributes(BasicFileAttributes::class.java)
-            "$volumeName:${attributes.lastModifiedTime().toMillis()}:${attributes.size()}"
+    private fun getLocalMultipartArchiveFile(file: Path, info: MultipartArchiveInfo): File {
+        if (file.isLinuxPath) {
+            return file.toFile()
         }
-        val cachedFile = File(cacheDirectory, "$cachePrefix${state.sha256Hex()}.${info.extension}")
-        if (cachedFile.isFile) {
-            return cachedFile
-        }
-        cacheDirectory.listFiles()?.forEach {
-            if (it.name.startsWith(cachePrefix)) {
-                it.deleteRecursively()
-            }
-        }
-        val tempFile = File.createTempFile(cachePrefix, ".${info.extension}", cacheDirectory)
-        val tempPath = Paths.get(tempFile.path)
-        val cachedPath = Paths.get(cachedFile.path)
-        var successful = false
-        try {
-            tempPath.newOutputStream().use { outputStream ->
-                for (volumeName in info.volumeNames) {
-                    val source = file.resolveSibling(volumeName)
-                    source.newInputStream().use { inputStream ->
-                        inputStream.copyTo(outputStream)
-                    }
-                }
-            }
-            tempPath.moveTo(cachedPath, StandardCopyOption.REPLACE_EXISTING)
-            successful = true
-            return cachedFile
-        } finally {
-            if (!successful) {
-                tempFile.delete()
-            }
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun getLocalMultipartArchiveFile(file: Path): File {
-        val info = getMultipartArchiveInfoOrNull(file)
-            ?: return getLocalSingleArchiveFile(file)
         val cacheDirectory = getCacheDirectory()
         val hash = buildString {
             append(file.fileSystem.provider().scheme)
@@ -406,14 +359,14 @@ internal object SevenZipArchiveReader {
 
     private fun collectNumberedVolumes(file: Path, fileName: String): MultipartArchiveInfo? {
         val match = matchNumberedArchive(fileName) ?: return null
-        val firstVolume = "${match.baseName}.001"
+        val firstVolume = match.getVolumeName(1)
         if (!file.resolveSibling(firstVolume).exists()) {
             return null
         }
         val volumeNames = mutableListOf<String>()
         var index = 1
         while (true) {
-            val volumeName = "${match.baseName}.${index.toString().padStart(3, '0')}"
+            val volumeName = match.getVolumeName(index)
             if (!file.resolveSibling(volumeName).exists()) {
                 break
             }
@@ -429,8 +382,12 @@ internal object SevenZipArchiveReader {
     private data class NumberedArchiveMatch(
         val baseName: String,
         val extension: String,
-        val number: Int
-    )
+        val number: Int,
+        val numberWidth: Int
+    ) {
+        fun getVolumeName(number: Int): String =
+            "$baseName.${number.toString().padStart(numberWidth, '0')}"
+    }
 
     private data class MultipartArchiveInfo(
         val baseName: String,
@@ -444,14 +401,15 @@ internal object SevenZipArchiveReader {
         val extensionPart = match.groupValues[2]
         val extension = extensionPart.lowercase(Locale.ROOT)
         val baseName = "${match.groupValues[1]}.$extensionPart"
-        val number = match.groupValues[3].toIntOrNull() ?: return null
-        return NumberedArchiveMatch(baseName, extension, number)
+        val numberString = match.groupValues[3]
+        val number = numberString.toIntOrNull() ?: return null
+        return NumberedArchiveMatch(baseName, extension, number, numberString.length)
     }
 
     private val PART_RAR_REGEX = Regex("(?i)(.+)\\.part(\\d+)\\.rar")
     private val OLD_STYLE_RAR_PART_REGEX = Regex("(?i).+\\.r\\d{2}")
     private val OLD_STYLE_ZIP_PART_REGEX = Regex("(?i).+\\.z\\d{2}")
-    private val NUMBERED_ARCHIVE_REGEX = Regex("(?i)(.+)\\.(7z|zip)\\.(\\d{3})")
+    private val NUMBERED_ARCHIVE_REGEX = Regex("(?i)(.+)\\.(7z|zip)\\.(\\d{3,})")
     private val supportedNumberedExtensions = setOf("7z", "zip")
 
     private fun getCacheDirectory(): File =

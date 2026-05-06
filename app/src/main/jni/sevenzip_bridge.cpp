@@ -169,6 +169,23 @@ static std::vector<PasswordAttempt> GetPasswordAttempts(JNIEnv *env, jobjectArra
   return attempts;
 }
 
+static bool HasNumberedArchiveSuffix(const std::string &path, const std::string &extension) {
+  const size_t lastDot = path.rfind('.');
+  if (lastDot == std::string::npos || path.size() - lastDot - 1 < 3) {
+    return false;
+  }
+  for (size_t i = lastDot + 1; i < path.size(); ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(path[i]))) {
+      return false;
+    }
+  }
+  if (lastDot < extension.size()) {
+    return false;
+  }
+  return path.compare(lastDot - extension.size(), extension.size(), extension) == 0;
+}
+
+
 static std::vector<const GUID *> GetCandidateFormats(const std::string &archivePath) {
   std::string lowerPath = archivePath;
   std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), [](unsigned char ch) {
@@ -178,6 +195,12 @@ static std::vector<const GUID *> GetCandidateFormats(const std::string &archiveP
     return {&CLSID_Format7z};
   }
   if (lowerPath.size() >= 4 && lowerPath.rfind(".zip") == lowerPath.size() - 4) {
+    return {&CLSID_FormatZip};
+  }
+  if (HasNumberedArchiveSuffix(lowerPath, ".7z")) {
+    return {&CLSID_Format7z};
+  }
+  if (HasNumberedArchiveSuffix(lowerPath, ".zip")) {
     return {&CLSID_FormatZip};
   }
   if ((lowerPath.size() >= 3 && lowerPath.rfind(".gz") == lowerPath.size() - 3)
