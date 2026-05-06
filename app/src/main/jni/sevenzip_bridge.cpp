@@ -65,6 +65,7 @@ struct PasswordAttempt {
 struct OpenArchiveResult {
   CMyComPtr<IInArchive> archive;
   CMyComPtr<IInStream> stream;
+  CMyComPtr<IArchiveOpenCallback> openCallback;
 };
 
 static jclass FindClassGlobal(JNIEnv *env, const char *name) {
@@ -144,6 +145,46 @@ static UString Utf8ToUString(const std::string &value) {
 
 static FString Utf8ToFString(const std::string &value) {
   return us2fs(Utf8ToUString(value));
+}
+
+static std::string GetBaseNameUtf8(const std::string &path) {
+  const size_t separator = path.find_last_of("/");
+  if (separator == std::string::npos) {
+    return path;
+  }
+  return path.substr(separator + 1);
+}
+
+static std::string GetParentPathUtf8(const std::string &path) {
+  const size_t separator = path.find_last_of("/");
+  if (separator == std::string::npos) {
+    return std::string();
+  }
+  if (separator == 0) {
+    return "/";
+  }
+  return path.substr(0, separator);
+}
+
+static std::string UStringToUtf8String(const UString &value) {
+  AString utf8;
+  UnicodeStringToMultiByte2(utf8, value, CP_UTF8);
+  return utf8.Ptr() ? std::string(utf8.Ptr()) : std::string();
+}
+
+static bool HasUnsafeVolumeName(const std::string &name) {
+  return name.empty() || name.find('/') != std::string::npos || name.find('\\') != std::string::npos
+      || name == "." || name == "..";
+}
+
+static std::string JoinPathUtf8(const std::string &directory, const std::string &name) {
+  if (directory.empty()) {
+    return name;
+  }
+  if (directory == "/") {
+    return directory + name;
+  }
+  return directory + "/" + name;
 }
 
 static jstring UStringToJString(JNIEnv *env, const UString &value) {
@@ -306,14 +347,18 @@ static jint GetEntryType(bool isDirectory, bool hasSymbolicLink, jint mode) {
 }
 
 class COpenCallback Z7_final : public IArchiveOpenCallback,
+                               public IArchiveOpenVolumeCallback,
                                public ICryptoGetTextPassword,
                                public CMyUnknownImp {
-  Z7_IFACES_IMP_UNK_2(IArchiveOpenCallback, ICryptoGetTextPassword)
+  Z7_IFACES_IMP_UNK_3(IArchiveOpenCallback, IArchiveOpenVolumeCallback, ICryptoGetTextPassword)
 
  public:
   bool PasswordIsDefined = false;
   bool PasswordWasRequested = false;
   UString Password;
+  UString ArchiveFileName;
+  std::string ArchiveDirectoryPathUtf8;
+  UInt64 ArchiveFileSize = 0;
 };
 
 Z7_COM7F_IMF(COpenCallback::SetTotal(const UInt64 *, const UInt64 *)) {
@@ -321,6 +366,41 @@ Z7_COM7F_IMF(COpenCallback::SetTotal(const UInt64 *, const UInt64 *)) {
 }
 
 Z7_COM7F_IMF(COpenCallback::SetCompleted(const UInt64 *, const UInt64 *)) {
+  return S_OK;
+}
+
+Z7_COM7F_IMF(COpenCallback::GetProperty(PROPID propID, PROPVARIANT *value)) {
+  NCOM::CPropVariant prop;
+  switch (propID) {
+    case kpidName:
+      prop = ArchiveFileName;
+      break;
+    case kpidSize:
+      prop = ArchiveFileSize;
+      break;
+    default:
+      break;
+  }
+  prop.Detach(value);
+  return S_OK;
+}
+
+Z7_COM7F_IMF(COpenCallback::GetStream(const wchar_t *name, IInStream **inStream)) {
+  *inStream = nullptr;
+  if (!name || !*name) {
+    return S_FALSE;
+  }
+  const std::string volumeNameUtf8 = UStringToUtf8String(UString(name));
+  if (HasUnsafeVolumeName(volumeNameUtf8)) {
+    return S_FALSE;
+  }
+  const FString volumePath = Utf8ToFString(JoinPathUtf8(ArchiveDirectoryPathUtf8, volumeNameUtf8));
+  auto *fileStreamSpec = new CInFileStream;
+  CMyComPtr<IInStream> volumeStream(fileStreamSpec);
+  if (!fileStreamSpec->Open(volumePath)) {
+    return S_FALSE;
+  }
+  *inStream = volumeStream.Detach();
   return S_OK;
 }
 
@@ -401,11 +481,13 @@ Z7_COM7F_IMF(CSingleEntryExtractCallback::CryptoGetTextPassword(BSTR *password))
 }
 
 static bool TryOpenArchive(
-    const FString &archivePath, const GUID &format, const PasswordAttempt &attempt,
-    OpenArchiveResult &result, bool &passwordRequested, std::string &errorMessage) {
+    const std::string &archivePathUtf8, const FString &archivePath, const GUID &format,
+    const PasswordAttempt &attempt, OpenArchiveResult &result, bool &passwordRequested,
+    std::string &errorMessage) {
   passwordRequested = false;
   result.archive.Release();
   result.stream.Release();
+  result.openCallback.Release();
   IInArchive *archiveSpec = nullptr;
   if (CreateObject(&format, &IID_IInArchive, reinterpret_cast<void **>(&archiveSpec)) != S_OK) {
     errorMessage = "Archive handler is unavailable";
@@ -424,12 +506,17 @@ static bool TryOpenArchive(
   CMyComPtr<IArchiveOpenCallback> openCallback(openCallbackSpec);
   openCallbackSpec->PasswordIsDefined = attempt.defined;
   openCallbackSpec->Password = attempt.value;
+  openCallbackSpec->ArchiveFileName = Utf8ToUString(GetBaseNameUtf8(archivePathUtf8));
+  openCallbackSpec->ArchiveDirectoryPathUtf8 = GetParentPathUtf8(archivePathUtf8);
+  fileStreamSpec->GetSize(&openCallbackSpec->ArchiveFileSize);
+  result.openCallback = openCallback;
   const HRESULT hr = result.archive->Open(result.stream, nullptr, openCallback);
   passwordRequested = openCallbackSpec->PasswordWasRequested;
   if (hr != S_OK) {
     errorMessage = passwordRequested ? "Incorrect password" : "Failed to open archive";
     result.archive.Release();
     result.stream.Release();
+    result.openCallback.Release();
     return false;
   }
   return true;
@@ -458,7 +545,7 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_listEntr
   for (const GUID *format : formats) {
     for (const PasswordAttempt &attempt : attempts) {
       bool passwordRequested = false;
-      if (TryOpenArchive(archivePath, *format, attempt, openResult, passwordRequested, errorMessage)) {
+      if (TryOpenArchive(archivePathUtf8, archivePath, *format, attempt, openResult, passwordRequested, errorMessage)) {
         opened = true;
         break;
       }
@@ -566,7 +653,7 @@ Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipBridge_extractE
     for (const PasswordAttempt &attempt : attempts) {
       OpenArchiveResult openResult;
       bool passwordRequested = false;
-      if (!TryOpenArchive(archivePath, *format, attempt, openResult, passwordRequested, errorMessage)) {
+      if (!TryOpenArchive(archivePathUtf8, archivePath, *format, attempt, openResult, passwordRequested, errorMessage)) {
         if (passwordRequested) {
           passwordRequired = true;
         }
